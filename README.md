@@ -1,115 +1,64 @@
-# Terraform S3 backend — steps and why we need it
+# Terraform Module Template
 
-## Why use an S3 backend
-- Stores Terraform state remotely so team members share one source of truth.
-- Enables state locking (with DynamoDB) to prevent concurrent writes/corruption.
-- Provides durability (S3 versioning) and encryption of state.
-- Allows CI/CD pipelines to run Terraform against the same state.
+A reusable Terraform module template for AWS infrastructure. This template includes semantic versioning, automated releases, and best practices for module development.
+
+## Features
+
+- **Semantic Versioning**: Automated version management using conventional commits
+- **Automated Releases**: GitHub releases with changelog generation
+- **State Management**: Pre-configured S3 backend with DynamoDB locking
+- **AWS Provider**: Terraform 1.8+ with AWS provider 5.0+
+- **Pre-commit Hooks**: Code quality checks before commits
 
 ## Prerequisites
-- AWS credentials with permissions to create S3 bucket, DynamoDB table, and manage objects.
-- AWS CLI or Console access.
-- Terraform installed.
 
-## Quick steps (high level)
-1. Create an S3 bucket for state.
-2. Enable versioning and server-side encryption on the bucket.
-3. Create a DynamoDB table for state locking (primary key: LockID).
-4. Add a backend configuration to your Terraform code (backend.tf or CLI backend-config).
-5. Initialize Terraform (terraform init) and migrate state if needed.
+- Terraform >= 1.8.0
+- AWS provider >= 5.0
+- AWS credentials configured
+- Git
 
-## Example commands (AWS CLI)
-Replace <region>, <bucket-name>, <dynamodb-table> accordingly.
+## Getting Started
 
-Create bucket, enable versioning and encryption:
-```bash
-aws s3api create-bucket --bucket my-terraform-state-bucket --region us-east-1
-aws s3api put-bucket-versioning --bucket my-terraform-state-bucket --versioning-configuration Status=Enabled
-aws s3api put-bucket-encryption --bucket my-terraform-state-bucket --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-aws s3api put-public-access-block --bucket my-terraform-state-bucket --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true
-```
+1. Clone or use this template to create a new repository
+2. Update the backend configuration in `terraform/providers.tf` with your S3 bucket and DynamoDB table
+3. Customize the module for your use case
+4. Follow conventional commit messages for automatic versioning
 
-Create DynamoDB table for locking:
-```bash
-aws dynamodb create-table \
-    --table-name terraform-state-lock \
-    --attribute-definitions AttributeName=LockID,AttributeType=S \
-    --key-schema AttributeName=LockID,KeyType=HASH \
-    --provisioned-throughput ReadCapacityUnits=5,WriteCapacityUnits=5
-```
+## Backend Configuration
 
-## Example backend.tf
-Place this in your repo (e.g., backend.tf) or pass equivalent via -backend-config:
+The module uses an S3 backend with DynamoDB state locking. Update `terraform/providers.tf`:
+
 ```hcl
 terraform {
-    backend "s3" {
-        bucket         = "my-terraform-state-bucket"
-        key            = "path/to/terraform.tfstate"  # e.g., env/project/terraform.tfstate
-        region         = "us-east-1"
-        dynamodb_table = "terraform-state-lock"
-        encrypt        = true
-    }
+  backend "s3" {
+    bucket         = "your-tfstate-bucket"
+    key            = "your-module/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
 }
 ```
 
-## Initialize and migrate state
-- If you already have local state and added backend.tf, run:
-```bash
-terraform init
-# Follow prompts to migrate local state to the S3 backend
-```
-- Or specify backend config at init:
-```bash
-terraform init \
-    -backend-config="bucket=my-terraform-state-bucket" \
-    -backend-config="key=env/prod/terraform.tfstate" \
-    -backend-config="region=us-east-1" \
-    -backend-config="dynamodb_table=terraform-state-lock" \
-    -backend-config="encrypt=true"
-```
+## Conventional Commits
 
-## Minimal IAM policy for Terraform user
-Allow S3 and DynamoDB operations Terraform needs:
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:GetObject",
-                "s3:PutObject",
-                "s3:ListBucket",
-                "s3:DeleteObject",
-                "s3:GetBucketVersioning",
-                "s3:PutBucketVersioning",
-                "s3:GetBucketEncryption",
-                "s3:PutBucketEncryption"
-            ],
-            "Resource": [
-                "arn:aws:s3:::my-terraform-state-bucket",
-                "arn:aws:s3:::my-terraform-state-bucket/*"
-            ]
-        },
-        {
-            "Effect": "Allow",
-            "Action": [
-                "dynamodb:PutItem",
-                "dynamodb:GetItem",
-                "dynamodb:DeleteItem",
-                "dynamodb:DescribeTable",
-                "dynamodb:UpdateItem"
-            ],
-            "Resource": "arn:aws:dynamodb:us-east-1:123456789012:table/terraform-state-lock"
-        }
-    ]
-}
-```
+This template uses semantic-release with conventional commits:
 
-## Notes / best practices
-- Use a per-environment key path (e.g., env/project/terraform.tfstate).
-- Enable S3 versioning so you can recover old state.
-- Restrict bucket access with least privilege and block public access.
-- Use MFA-protected or temporary credentials in CI where possible.
+- `feat:` - New features (minor version bump)
+- `fix:` - Bug fixes (patch version bump)
+- `perf:` - Performance improvements (patch version bump)
+- `refactor:` - Code refactoring (patch version bump)
+- `docs:` - Documentation updates (no release)
+- `test:` - Test updates (no release)
+- `chore:` - Maintenance tasks (no release)
 
-Place this README content into /Users/cameronmonthe/Desktop/workplace/general-template/README.md and update the sample names and ARNs to match your account.
+## Development
+
+1. Make changes to your module
+2. Commit with conventional commit messages
+3. Push to main branch
+4. Automated release will create a GitHub release with changelog
+
+## License
+
+See LICENSE file for details.
